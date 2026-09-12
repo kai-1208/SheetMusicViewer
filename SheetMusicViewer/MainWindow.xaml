@@ -7,36 +7,48 @@
         Background="#222222">
     <Grid>
         <Grid.RowDefinitions>
+            <!-- メニューバー用（非表示にできるようAuto指定） -->
             <RowDefinition Height="Auto"/>
+            <!-- 楽譜表示エリア -->
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
-        <!-- 上部操作バー -->
-        <Border Grid.Row="0" Background="#2D2D30" Padding="10,8">
+        <!-- 1. メニューバー（Mキーで非表示/表示切り替え） -->
+        <Border x:Name="TopMenuBar" Grid.Row="0" Background="#2D2D30" Padding="10,8">
             <DockPanel LastChildFill="False">
                 <StackPanel Orientation="Horizontal" DockPanel.Dock="Left">
                     <Button Content="楽譜(PDF)を開く" Click="OpenFile_Click" Padding="12,6" Margin="0,0,15,0" />
-                    <TextBlock x:Name="PageInfoText" Foreground="#CCCCCC" VerticalAlignment="Center" FontSize="14" Text="PDFファイルを開いてください（[→] 次へ / [←] 前へ）" />
+                    <TextBlock x:Name="PageInfoText" Foreground="#CCCCCC" VerticalAlignment="Center" FontSize="14" Text="PDFファイルを開いてください" />
                 </StackPanel>
 
-                <TextBlock DockPanel.Dock="Right" Foreground="#888888" VerticalAlignment="Center" FontSize="12" Text="F11: 全画面切替" Margin="0,0,10,0" />
+                <!-- 操作ヘルプ表示 -->
+                <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
+                    <TextBlock Foreground="#AAAAAA" FontSize="12" Margin="0,0,12,0" Text="[M] メニュー隠す" />
+                    <TextBlock Foreground="#AAAAAA" FontSize="12" Margin="0,0,12,0" Text="[R] 1枚横向き切替" />
+                    <TextBlock Foreground="#AAAAAA" FontSize="12" Text="[F11] 全画面" />
+                </StackPanel>
             </DockPanel>
         </Border>
 
-        <!-- 楽譜（見開き2ページ）表示エリア -->
-        <Grid Grid.Row="1" Margin="10">
+        <!-- 2. 楽譜表示エリア -->
+        <Grid Grid.Row="1" Margin="8">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*"/>
-                <ColumnDefinition Width="*"/>
+                <ColumnDefinition x:Name="LeftColumn" Width="*"/>
+                <ColumnDefinition x:Name="RightColumn" Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 左ページ -->
-            <Border Grid.Column="0" Margin="4" Background="#181818" CornerRadius="4">
-                <Image x:Name="LeftPageImage" Stretch="Uniform" />
+            <!-- 左ページ（または1枚表示時の単一エリア） -->
+            <Border x:Name="LeftPageBorder" Grid.Column="0" Margin="4" Background="#181818" CornerRadius="4">
+                <Image x:Name="LeftPageImage" Stretch="Uniform">
+                    <!-- 90度回転用のTransform -->
+                    <Image.LayoutTransform>
+                        <RotateTransform x:Name="LeftImageRotation" Angle="0"/>
+                    </Image.LayoutTransform>
+                </Image>
             </Border>
 
-            <!-- 右ページ -->
-            <Border Grid.Column="1" Margin="4" Background="#181818" CornerRadius="4">
+            <!-- 右ページ（1枚モード時は非表示） -->
+            <Border x:Name="RightPageBorder" Grid.Column="1" Margin="4" Background="#181818" CornerRadius="4">
                 <Image x:Name="RightPageImage" Stretch="Uniform" />
             </Border>
         </Grid>

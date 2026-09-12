@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
@@ -15,8 +16,10 @@ namespace SheetMusicViewer
     {
         private IDocReader _docReader;
         private int _totalPages = 0;
-        private int _currentLeftPageIndex = 0; // 0始まり（0 = 1ページ目）
+        private int _currentPageIndex = 0; // 0始まり（0 = 1ページ目）
+
         private bool _isFullScreen = false;
+        private bool _isSingleRotateMode = false; // 1枚横向きモードのフラグ
 
         public MainWindow()
         {
@@ -38,20 +41,19 @@ namespace SheetMusicViewer
             }
         }
 
-        // PDFの読み込み
+        // PDF読み込み
         private void LoadPdf(string filePath)
         {
             try
             {
                 _docReader?.Dispose();
 
-                // 楽譜をノートPC画面でくっきり読めるよう高解像度(2.0倍)でレンダリング
                 _docReader = DocLib.Instance.GetDocReader(filePath, new PageDimensions(2.0));
                 _totalPages = _docReader.GetPageCount();
-                _currentLeftPageIndex = 0;
+                _currentPageIndex = 0;
 
                 RenderCurrentPages();
-                this.Focus(); // キー操作をすぐ受け取れるようにフォーカスを当てる
+                this.Focus();
             }
             catch (Exception ex)
             {
@@ -59,10 +61,24 @@ namespace SheetMusicViewer
             }
         }
 
-        // キーボード操作（ページ送り/戻し、全画面）
+        // キーボード操作ハンドラ
         private void Window_KeyDown(object sender, KeyEventArgs e)
         {
-            // F11キーで全画面表示の切り替え（演奏時に便利）
+            // 【機能1】 M キー: 上部メニューバーの表示 / 非表示切り替え
+            if (e.Key == Key.M)
+            {
+                ToggleMenuBar();
+                return;
+            }
+
+            // 【機能2】 R キー: 1枚横向き(90度回転)モードの切り替え
+            if (e.Key == Key.R)
+            {
+                ToggleSingleRotateMode();
+                return;
+            }
+
+            // F11: 全画面表示切り替え
             if (e.Key == Key.F11)
             {
                 ToggleFullScreen();
@@ -71,62 +87,105 @@ namespace SheetMusicViewer
 
             if (_docReader == null) return;
 
-            // 次のページへ（右矢印、PageDown、スペースキー）
+            // ページ送り幅（見開きなら2、1枚モードなら1）
+            int step = _isSingleRotateMode ? 1 : 2;
+
+            // 次のページへ（右矢印、PageDown、スペース）
             if (e.Key == Key.Right || e.Key == Key.PageDown || e.Key == Key.Space)
             {
-                // 次のページが存在すれば2ページ進める
-                if (_currentLeftPageIndex + 2 < _totalPages)
+                if (_currentPageIndex + step < _totalPages)
                 {
-                    _currentLeftPageIndex += 2;
+                    _currentPageIndex += step;
                     RenderCurrentPages();
                 }
             }
             // 前のページへ（左矢印、PageUp）
             else if (e.Key == Key.Left || e.Key == Key.PageUp)
             {
-                // 前のページが存在すれば2ページ戻す
-                if (_currentLeftPageIndex - 2 >= 0)
+                if (_currentPageIndex - step >= 0)
                 {
-                    _currentLeftPageIndex -= 2;
+                    _currentPageIndex -= step;
                     RenderCurrentPages();
                 }
             }
         }
 
-        // 左右のページを描画
+        // 【機能1の実装】メニューバーの表示/非表示トグル
+        private void ToggleMenuBar()
+        {
+            TopMenuBar.Visibility = (TopMenuBar.Visibility == Visibility.Visible)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+
+        // 【機能2の実装】1枚横向き（90度回転）モードの切り替え
+        private void ToggleSingleRotateMode()
+        {
+            _isSingleRotateMode = !_isSingleRotateMode;
+
+            if (_isSingleRotateMode)
+            {
+                // 1枚横向きモード:
+                // 右側エリアを隠し、左側を画面全体（2列分）に広げ、90度回転させる
+                RightPageBorder.Visibility = Visibility.Collapsed;
+                Grid.SetColumnSpan(LeftPageBorder, 2);
+                LeftImageRotation.Angle = 90; // 時計回りに90度（※反時計回りが良い場合は -90 に変更可能）
+            }
+            else
+            {
+                // 通常の見開き2枚モードに戻す:
+                Grid.SetColumnSpan(LeftPageBorder, 1);
+                RightPageBorder.Visibility = Visibility.Visible;
+                LeftImageRotation.Angle = 0; // 回転を解除
+
+                // 偶数始まり（見開き位置）にインデックスを補正
+                if (_currentPageIndex % 2 != 0)
+                {
+                    _currentPageIndex -= 1;
+                }
+            }
+
+            RenderCurrentPages();
+        }
+
+        // 描画処理
         private void RenderCurrentPages()
         {
             if (_docReader == null || _totalPages == 0) return;
 
-            // 1. 左ページの描画（常に存在するページ）
-            LeftPageImage.Source = RenderPageToBitmap(_currentLeftPageIndex);
-
-            // 2. 右ページの描画判定
-            int rightPageIndex = _currentLeftPageIndex + 1;
-
-            if (rightPageIndex < _totalPages)
+            if (_isSingleRotateMode)
             {
-                // 右ページが存在する場合（偶数ページ数がある通常時）
-                RightPageImage.Source = RenderPageToBitmap(rightPageIndex);
-                PageInfoText.Text = $"{_currentLeftPageIndex + 1}-{rightPageIndex + 1} / {_totalPages} ページ";
+                // --- 1枚横向き表示 ---
+                LeftPageImage.Source = RenderPageToBitmap(_currentPageIndex);
+                PageInfoText.Text = $"[1枚横向] {_currentPageIndex + 1} / {_totalPages} ページ";
             }
             else
             {
-                // 最終ページが奇数の場合、右側は空白にして1枚のみ表示
-                RightPageImage.Source = null;
-                PageInfoText.Text = $"{_currentLeftPageIndex + 1} / {_totalPages} ページ (最終ページ)";
+                // --- 見開き2枚表示 ---
+                LeftPageImage.Source = RenderPageToBitmap(_currentPageIndex);
+
+                int rightPageIndex = _currentPageIndex + 1;
+                if (rightPageIndex < _totalPages)
+                {
+                    RightPageImage.Source = RenderPageToBitmap(rightPageIndex);
+                    PageInfoText.Text = $"{_currentPageIndex + 1}-{rightPageIndex + 1} / {_totalPages} ページ";
+                }
+                else
+                {
+                    // 最終ページが奇数の場合は右側を空白にする
+                    RightPageImage.Source = null;
+                    PageInfoText.Text = $"{_currentPageIndex + 1} / {_totalPages} ページ (最終ページ)";
+                }
             }
         }
 
-        // PDFの指定ページをWPF用のBitmap画像に変換
+        // PDFの指定ページをBitmap画像に変換
         private BitmapSource RenderPageToBitmap(int pageIndex)
         {
             using (var pageReader = _docReader.GetPageReader(pageIndex))
             {
                 var width = pageReader.GetPageWidth();
                 var height = pageReader.GetPageHeight();
-
-                // 楽譜の透過によるチラつきを防ぐため、白背景(RGB: 255, 255, 255)でレンダリング
                 var rawBytes = pageReader.GetImage(new NaiveTransparencyRemover(255, 255, 255));
 
                 var bitmap = BitmapSource.Create(
@@ -140,12 +199,12 @@ namespace SheetMusicViewer
                     width * 4
                 );
 
-                bitmap.Freeze(); // 描画処理の高速化
+                bitmap.Freeze();
                 return bitmap;
             }
         }
 
-        // 全画面表示のトグル切り替え
+        // 全画面表示のトグル
         private void ToggleFullScreen()
         {
             if (!_isFullScreen)
@@ -162,7 +221,6 @@ namespace SheetMusicViewer
             }
         }
 
-        // アプリ終了時にPDFリソースを確実に解放
         protected override void OnClosed(EventArgs e)
         {
             _docReader?.Dispose();
